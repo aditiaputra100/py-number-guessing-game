@@ -1,7 +1,12 @@
 from enum import Enum
+import json
+import os
 import random
 import threading
 import time
+
+FILE_NAME = 'highscores.json'
+
 
 # Event trigger user guess
 event = threading.Event()
@@ -31,8 +36,21 @@ def start_timer(limit: int):
 
         time.sleep(1)
 
-def run_game(random_number: int, chances: int):
-    life = chances
+def load_highscores():
+    if not os.path.exists(FILE_NAME):
+        return {d.name: None for d in Difficulty}
+
+    with open(FILE_NAME, 'r') as file_json:
+        return json.load(file_json)
+
+def save_highscores(highscores):
+    with open(FILE_NAME, 'w') as file_json:
+        json.dump(highscores, file_json, indent=4)
+
+def run_game(random_number: int, chances: int, difficult):
+    highscores: dict | None = load_highscores()
+  
+    life = chances + 1
 
     while 0 < chances and not event.is_set():
         try:
@@ -44,7 +62,17 @@ def run_game(random_number: int, chances: int):
                 break
 
             if input_guess == random_number:
-                print(f'Congratulations! You guessed the correct number in {life - chances} attempts.')
+                chances = life - chances
+
+                print(f'Congratulations! You guessed the correct number in {chances} attempts.')
+                best_score = highscores.get(difficult)
+
+                if best_score is None or chances < best_score:
+                      highscores[difficult] = chances
+                      save_highscores(highscores)
+
+                      print('New best score!!!')
+
                 event.set()
                 rolling_event.set()
                 break
@@ -64,6 +92,7 @@ def run_game(random_number: int, chances: int):
         print(f'\nSorry.. the correct number is {random_number}')
 
 def start_game(random_number: int):
+    highscores: dict | None = load_highscores()
     welcome_script: str = '''Welcome to the Number Guessing Game!
         \rI'm thinking of a number between 1 and 100.
         \rYou have 5 chances to guess the correct number.
@@ -80,8 +109,12 @@ def start_game(random_number: int):
     }
     print('Please select the difficulty level:')
 
-    for index, (difficulty, (chances, times)) in enumerate(difficulty_chances.items()):
-        print(f'{index + 1}. {difficulty.capitalize()} ({chances} chances) ({times} seconds)')
+    for index, (difficulty, chances) in enumerate(difficulty_chances.items()):
+
+        best_score = highscores.get(difficulty.upper())
+        best_score_str = f' | Best: {best_score if best_score else 0} tries'
+
+        print(f'{index + 1}. {difficulty.capitalize()} ({chances} chances)', best_score_str if highscores is not None else '')
 
     # Input choice
     input_choice: int = int(input("Enter your choice: "))
@@ -93,7 +126,7 @@ def start_game(random_number: int):
 
     user_chances: int = difficulty_choice.value[0]
 
-    game_thread = threading.Thread(target=run_game, args=(random_number, user_chances))
+    game_thread = threading.Thread(target=run_game, args=(random_number, user_chances, difficulty_choice.name))
     game_thread.daemon = True
     game_thread.start()
 
