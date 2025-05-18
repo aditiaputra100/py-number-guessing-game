@@ -26,7 +26,8 @@ def start_timer(limit: int):
     while time.time() - start_time < time_limit:
         if event.is_set():
             break
-         remaining = time.time() - start_time
+
+        remaining = time.time() - start_time
 
         if not half_alerted and (remaining >= time_limit / 2):
             remaining = int(remaining)
@@ -46,10 +47,10 @@ def save_highscores(highscores):
     with open(FILE_NAME, 'w') as file_json:
         json.dump(highscores, file_json, indent=4)
 
-def run_game(random_number: int, chances: int):
+def run_game(random_number: int, chances: int, difficult):
     highscores: dict | None = load_highscores()
   
-     life = user_chances + 1
+    life = chances + 1
 
     while 0 < chances and not event.is_set():
         try:
@@ -61,19 +62,17 @@ def run_game(random_number: int, chances: int):
                 break
 
             if input_guess == random_number:
-                print(f'Congratulations! You guessed the correct number in {life - chances} attempts.')
-                
-                chances = life - user_chances
+                chances = life - chances
 
-              print(f'Congratulations! You guessed the correct number in {chances} attempts.')
-              best_score = highscores.get(difficulty_choice.name)
+                print(f'Congratulations! You guessed the correct number in {chances} attempts.')
+                best_score = highscores.get(difficult)
 
-              if best_score is None or chances < best_score:
-                  highscores[difficulty_choice.name] = chances
-                  save_highscores(highscores)
+                if best_score is None or chances < best_score:
+                      highscores[difficult] = chances
+                      save_highscores(highscores)
 
-                  print('New best score!!!')
-                
+                      print('New best score!!!')
+
                 event.set()
                 rolling_event.set()
                 break
@@ -127,7 +126,7 @@ def start_game(random_number: int):
 
     user_chances: int = difficulty_choice.value[0]
 
-    game_thread = threading.Thread(target=run_game, args=(random_number, user_chances))
+    game_thread = threading.Thread(target=run_game, args=(random_number, user_chances, difficulty_choice.name))
     game_thread.daemon = True
     game_thread.start()
 
