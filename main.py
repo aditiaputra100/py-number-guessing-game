@@ -1,12 +1,11 @@
 from enum import Enum
-import os
 import random
-import signal
 import threading
 import time
 
 # Event trigger user guess
 event = threading.Event()
+rolling_event = threading.Event()
 
 class Difficulty(Enum):
     EASY = (10, 90)
@@ -33,22 +32,35 @@ def start_timer(limit: int):
         time.sleep(1)
 
 def run_game(random_number: int, chances: int):
+    life = chances
+
     while 0 < chances and not event.is_set():
         try:
             # Input user guess
             input_guess: int = int(input('Enter your guess: '))
 
+            if event.is_set():
+                rolling_event.set()
+                break
+
             if input_guess == random_number:
-                print(f'Congratulations! You guessed the correct number in {chances} attempts.')
+                print(f'Congratulations! You guessed the correct number in {life - chances} attempts.')
                 event.set()
+                rolling_event.set()
                 break
 
             print(f'Incorrect! The number is {'less' if input_guess >= random_number else 'greater'} {input_guess}')
 
             chances -= 1
         except ValueError:
+            if event.is_set():
+                rolling_event.set()
+                break
+
             print("Error: please enter valid number.")
     else:
+        event.set()
+        rolling_event.set()
         print(f'\nSorry.. the correct number is {random_number}')
 
 def start_game(random_number: int):
@@ -82,6 +94,7 @@ def start_game(random_number: int):
     user_chances: int = difficulty_choice.value[0]
 
     game_thread = threading.Thread(target=run_game, args=(random_number, user_chances))
+    game_thread.daemon = True
     game_thread.start()
 
     # Start timer
@@ -91,16 +104,35 @@ def start_game(random_number: int):
     game_thread.join(timeout=difficulty_choice.value[1])
 
     if game_thread.is_alive():
-        print("\nTime's up! Terminating game...")
+        event.set()
+        print("\nTime's up!")
         print(f'Sorry.. the correct number is {random_number}')
-        os.kill(os.getpid(), signal.SIGINT)
+        print('Press enter to continue..')
+        game_thread.join()
 
 
 def main():
-    # Start the game
-    random_number = random.randint(1, 100)
+    while True:
+        # Start the game
+        random_number = random.randint(1, 100)
 
-    start_game(random_number)
+        start_game(random_number)
+
+        while rolling_event.is_set():
+            # Rolling game
+            user_input = input("Do you want to play again? (y/n) ").lower()
+
+            while user_input not in ['y', 'n']:
+                print('Error: please enter the correct answer')
+                user_input = input("Do you want to play again? (y/n) ").lower()
+
+            if user_input == 'n':
+                exit(0)
+
+            if user_input == 'y':
+                rolling_event.clear()
+                event.clear()
+                break
 
 if __name__ == '__main__':
     main()
